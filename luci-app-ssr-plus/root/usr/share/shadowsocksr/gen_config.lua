@@ -73,7 +73,7 @@ function wireguard()
 				publicKey = server.peer_pubkey,
 				preSharedKey = server.preshared_key,
 				endpoint = server.server .. ":" .. server.server_port,
-				keepAlive = tonumber(server.heartbeat),
+				keepAlive = tonumber(server.keepaliveperiod),
 				allowedIPs = (server.allowedips) or nil,
 			}
 		},
@@ -234,6 +234,11 @@ local Xray = {
 				-- httpupgrade
 				host = (server.httpupgrade_host or server.tls_host) or nil,
                                 path = server.httpupgrade_path or ""
+			} or nil,
+			splithttpSettings = (server.transport == "splithttp") and {
+				-- splithttp
+				host = (server.splithttp_host or server.tls_host) or nil,
+                                path = server.splithttp_path or ""
 			} or nil,
 			httpSettings = (server.transport == "h2") and {
 				-- h2
@@ -476,8 +481,8 @@ local tuic = {
 			receive_window = tonumber(server.receive_window)
 		},
 		["local"] = {
-			server = tonumber(socks_port) and (server.tuic_dual_stack == "1" and "[::1]:" or "127.0.0.1:")  .. (socks_port == "0" and local_port or tonumber(socks_port)),
-			dual_stack = (server.tuic_dual_stack == "1") and true or false,
+			server = tonumber(socks_port) and "[::]:" .. (socks_port == "0" and local_port or tonumber(socks_port)),
+			dual_stack = (server.tuic_dual_stack == "1") and true  or nil,
 			max_packet_size = tonumber(server.tuic_max_package_size)
 		}
 }
