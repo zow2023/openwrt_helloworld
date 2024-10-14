@@ -1,5 +1,5 @@
 diff --git a/luci-app-passwall/Makefile b/luci-app-passwall/Makefile
-index 4b41cee..b3e867e 100644
+index e4be5cc..56f563b 100644
 --- a/luci-app-passwall/Makefile
 +++ b/luci-app-passwall/Makefile
 @@ -171,7 +171,6 @@ define Package/$(PKG_NAME)/conffiles
@@ -24,11 +24,11 @@ index 03006a6..f384bbc 100644
  	if code ~= 0 then
  		local use_time = luci.sys.exec("echo -n '" .. result .. "' | awk -F ':' '{print $2}'")
 diff --git a/luci-app-passwall/luasrc/model/cbi/passwall/client/global.lua b/luci-app-passwall/luasrc/model/cbi/passwall/client/global.lua
-index 6df0021..1411a56 100644
+index cd9d8d4..0e5299b 100644
 --- a/luci-app-passwall/luasrc/model/cbi/passwall/client/global.lua
 +++ b/luci-app-passwall/luasrc/model/cbi/passwall/client/global.lua
-@@ -435,6 +435,12 @@ o:value("9.9.9.9", "9.9.9.9 (Quad9-Recommended)")
- o:value("149.112.112.112", "149.112.112.112 (Quad9-Recommended)")
+@@ -413,6 +413,12 @@ o:value("9.9.9.9", "9.9.9.9 (Quad9)")
+ o:value("149.112.112.112", "149.112.112.112 (Quad9)")
  o:value("208.67.220.220", "208.67.220.220 (OpenDNS)")
  o:value("208.67.222.222", "208.67.222.222 (OpenDNS)")
 +if nixio.fs.access("/usr/share/mosdns/mosdns.sh") then
@@ -41,40 +41,38 @@ index 6df0021..1411a56 100644
  o:depends({dns_mode = "tcp"})
  o:depends({dns_mode = "udp"})
 diff --git a/luci-app-passwall/luasrc/view/passwall/app_update/app_version.htm b/luci-app-passwall/luasrc/view/passwall/app_update/app_version.htm
-index c49ab6f..1591b79 100644
+index 739c593..3769e7d 100644
 --- a/luci-app-passwall/luasrc/view/passwall/app_update/app_version.htm
 +++ b/luci-app-passwall/luasrc/view/passwall/app_update/app_version.htm
-@@ -177,12 +177,10 @@ local version = {}
+@@ -180,12 +180,12 @@ local version = {}
  <div class="cbi-value">
  	<label class="cbi-value-title">Passwall <%:Version%></label>
  	<div class="cbi-value-field">
 -		<div class="cbi-value-description">
--			<span>【 <%=api.get_version()%> 】</span>
--			<input class="btn cbi-button cbi-button-apply" type="button" id="passwall-check_btn"
--				onclick="onBtnClick(this,'passwall');" value="<%:Check update%>" />
--			<span id="passwall-check_btn-detail"></span>
++		<!--div class="cbi-value-description"-->
+ 			<span>【 <%=api.get_version()%> 】</span>
+ 			<input class="btn cbi-button cbi-button-apply" type="button" id="passwall-check_btn"
+ 				onclick="onBtnClick(this,'passwall');" value="<%:Check update%>" />
+ 			<span id="passwall-check_btn-detail"></span>
 -		</div>
-+		<span>【 <%=api.get_version()%> 】</span>
-+		<input class="btn cbi-button cbi-button-apply" type="button" id="passwall-check_btn"
-+			onclick="onBtnClick(this,'passwall');" value="<%:Check update%>" />
-+		<span id="passwall-check_btn-detail"></span>
++		<!--/div-->
  	</div>
  </div>
  
-@@ -193,12 +191,10 @@ local version = {}
+@@ -196,14 +196,14 @@ local version = {}
  		<%:Version%>
  	</label>
  	<div class="cbi-value-field">
 -		<div class="cbi-value-description">
--			<span>【 <%=version[k] ~="" and version[k] or translate("Null") %> 】</span>
--			<input class="btn cbi-button cbi-button-apply" type="button" id="_<%=k%>-check_btn"
--				onclick="onBtnClick(this,'<%=k%>');" value="<%:Check update%>" />
--			<span id="_<%=k%>-check_btn-detail"></span>
++		<!--div class="cbi-value-description"-->
+ 			<span>【 <%=version[k] ~="" and version[k] or translate("Null") %> 】</span>
+ 			<input class="btn cbi-button cbi-button-apply" type="button" id="_<%=k%>-check_btn"
+ 				onclick="onBtnClick(this,'<%=k%>');" value="<%:Check update%>" />
+ 			<input class="btn cbi-button cbi-button-apply" type="button" id="_<%=k%>-force_btn"
+ 				onclick="doUpdate(this,'<%=k%>');" value="<%:Force update%>" style="display:none"/>
+ 			<span id="_<%=k%>-check_btn-detail"></span>
 -		</div>
-+		<span>【 <%=version[k] ~="" and version[k] or translate("Null") %> 】</span>
-+		<input class="btn cbi-button cbi-button-apply" type="button" id="_<%=k%>-check_btn"
-+			onclick="onBtnClick(this,'<%=k%>');" value="<%:Check update%>" />
-+		<span id="_<%=k%>-check_btn-detail"></span>
++		<!--/div-->
  	</div>
  </div>
  <%end%>
@@ -187,7 +185,7 @@ index 24662de..77b6a0b 100644
  	</div>
  </div>
 diff --git a/luci-app-passwall/root/usr/share/passwall/0_default_config b/luci-app-passwall/root/usr/share/passwall/0_default_config
-index 3addd08..25ad638 100644
+index 1bdbb35..cab712b 100644
 --- a/luci-app-passwall/root/usr/share/passwall/0_default_config
 +++ b/luci-app-passwall/root/usr/share/passwall/0_default_config
 @@ -32,7 +32,7 @@ config global_haproxy
@@ -200,13 +198,14 @@ index 3addd08..25ad638 100644
  config global_forwarding
  	option tcp_no_redir_ports 'disable'
 diff --git a/luci-app-passwall/root/usr/share/passwall/rules/direct_host b/luci-app-passwall/root/usr/share/passwall/rules/direct_host
-index a3b1464..2613703 100644
+index a3b1464..2aed721 100644
 --- a/luci-app-passwall/root/usr/share/passwall/rules/direct_host
 +++ b/luci-app-passwall/root/usr/share/passwall/rules/direct_host
-@@ -4,8 +4,12 @@ microsoft.com
+@@ -4,8 +4,13 @@ microsoft.com
  dyndns.com
  douyucdn.cn
  douyucdn2.cn
++ghp.ci
 +gitmirror.com
  location.services.mozilla.com
  
@@ -216,7 +215,7 @@ index a3b1464..2613703 100644
  #steam
  steamcontent.com
  dl.steam.clngaa.com
-@@ -19,6 +23,15 @@ cdn-qc.content.steamchina.com
+@@ -19,6 +24,15 @@ cdn-qc.content.steamchina.com
  cdn-ali.content.steamchina.com
  epicgames-download1-1251447533.file.myqcloud.com
  
@@ -233,7 +232,7 @@ index a3b1464..2613703 100644
  dns.alidns.com
  doh.pub
 diff --git a/luci-app-passwall/root/usr/share/passwall/rules/direct_ip b/luci-app-passwall/root/usr/share/passwall/rules/direct_ip
-index b73edaa..cb10e78 100644
+index b73edaa..d48bc4a 100644
 --- a/luci-app-passwall/root/usr/share/passwall/rules/direct_ip
 +++ b/luci-app-passwall/root/usr/share/passwall/rules/direct_ip
 @@ -4,7 +4,11 @@
@@ -241,7 +240,7 @@ index b73edaa..cb10e78 100644
  119.29.29.29
  180.76.76.76
 +34.149.0.0/16
-+148.135.119.0/24
++72.18.83.0/24
  1.12.12.12
  120.53.53.53
 +203.208.39.192/28
