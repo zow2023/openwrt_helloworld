@@ -5,9 +5,9 @@ PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/MetaCubeX/mihomo.git
-PKG_SOURCE_DATE:=2024-10-12
-PKG_SOURCE_VERSION:=ca3f1ebae6b71c2224987f1cf7828cf1338d5509
-PKG_MIRROR_HASH:=0c53892f20a8a4860565c58508c2a02bc6351bbd68a781bbe4b64e491e6762ce
+PKG_SOURCE_DATE:=2024-12-06
+PKG_SOURCE_VERSION:=d6b496d3c0eb99cf966e0f93ed00434797e5216c
+PKG_MIRROR_HASH:=c292d2bc4a733cfaf9f28ba6c4e5117672243b0552297bf31ba908469055dcc6
 
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=Joseph Mory <morytyann@gmail.com>
@@ -16,7 +16,7 @@ PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
-PKG_BUILD_VERSION:=alpha-ca3f1eb
+PKG_BUILD_VERSION:=alpha-d6b496d
 PKG_BUILD_TIME:=$(shell date -u -Iseconds)
 
 GO_PKG:=github.com/metacubex/mihomo
@@ -31,8 +31,8 @@ define Package/mihomo
   CATEGORY:=Network
   TITLE:=A rule based proxy in Go.
   URL:=https://wiki.metacubex.one
-  DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle +curl +yq firewall4 +kmod-nft-tproxy +ip-full +kmod-tun +procd-ujail
-  USERID:=mihomo=7890:mihomo=7890
+  DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle +curl +yq firewall4 +ip-full +kmod-inet-diag +kmod-nft-tproxy +kmod-tun
+  USERID:=root:mihomo=7890
 endef
 
 define Package/mihomo/description
@@ -53,14 +53,14 @@ define Package/mihomo/install
 	$(INSTALL_DIR) $(1)/etc/mihomo/scripts
 	$(INSTALL_DIR) $(1)/etc/mihomo/nftables
 	$(INSTALL_DIR) $(1)/etc/mihomo/profiles
+	$(INSTALL_DIR) $(1)/etc/mihomo/subscriptions
 	$(INSTALL_DIR) $(1)/etc/mihomo/run
-	$(INSTALL_DIR) $(1)/etc/mihomo/run/rules
 	$(INSTALL_DIR) $(1)/etc/mihomo/run/ui
 
 	$(INSTALL_DATA) $(CURDIR)/files/mixin.yaml $(1)/etc/mihomo/mixin.yaml
 
-	$(INSTALL_BIN) $(CURDIR)/files/scripts/constants.sh $(1)/etc/mihomo/scripts/constants.sh
-	$(INSTALL_BIN) $(CURDIR)/files/scripts/tun.sh $(1)/etc/mihomo/scripts/tun.sh
+	$(INSTALL_BIN) $(CURDIR)/files/scripts/include.sh $(1)/etc/mihomo/scripts/include.sh
+	$(INSTALL_BIN) $(CURDIR)/files/scripts/firewall_include.sh $(1)/etc/mihomo/scripts/firewall_include.sh
 
 	$(INSTALL_BIN) $(CURDIR)/files/nftables/hijack.nft $(1)/etc/mihomo/nftables/hijack.nft
 	$(INSTALL_BIN) $(CURDIR)/files/nftables/reserved_ip.nft $(1)/etc/mihomo/nftables/reserved_ip.nft
@@ -78,9 +78,6 @@ define Package/mihomo/install
 	$(INSTALL_BIN) $(CURDIR)/files/uci-defaults/firewall.sh $(1)/etc/uci-defaults/99_firewall_mihomo
 	$(INSTALL_BIN) $(CURDIR)/files/uci-defaults/init.sh $(1)/etc/uci-defaults/99_init_mihomo
 	$(INSTALL_BIN) $(CURDIR)/files/uci-defaults/migrate.sh $(1)/etc/uci-defaults/99_migrate_mihomo
-
-	$(INSTALL_DIR) $(1)/etc/capabilities
-	$(INSTALL_DATA) $(CURDIR)/files/capabilities.json $(1)/etc/capabilities/mihomo.json
 
 	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
 	$(INSTALL_DATA) $(CURDIR)/files/mihomo.upgrade $(1)/lib/upgrade/keep.d/mihomo

@@ -22,6 +22,12 @@ PKG_BUILD_DEPENDS:=golang/host bpf-headers
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
+ifeq ($(ARCH),arm)
+PATCH_DIR:=patches_arm
+else ifeq ($(ARCH),riscv64)
+PATCH_DIR:=patches_riscv
+endif
+
 GO_PKG:=github.com/daeuniverse/dae-wing
 GO_PKG_LDFLAGS:= \
 	-X '$(GO_PKG)/db.AppDescription=$(PKG_NAME) is a integration solution of dae, API and UI.'
@@ -49,21 +55,7 @@ define Package/daed
   # You need enable KERNEL_DEBUG_INFO_BTF and KERNEL_BPF_EVENTS
   DEPENDS:=$(GO_ARCH_DEPENDS) $(BPF_DEPENDS) \
     +ca-bundle +kmod-sched-core +kmod-sched-bpf +kmod-xdp-sockets-diag \
-    +kmod-veth
-endef
-
-define Package/daed-geoip
-  $(call Package/daed/Default)
-  TITLE:=geoip for daed
-  DEPENDS:=+daed +v2ray-geoip
-  PKGARCH:=all
-endef
-
-define Package/daed-geosite
-  $(call Package/daed/Default)
-  TITLE:=geosite for daed
-  DEPENDS:=+daed +v2ray-geosite
-  PKGARCH:=all
+    +kmod-veth +v2ray-geoip +v2ray-geosite
 endef
 
 define Package/daed/description
@@ -145,18 +137,6 @@ define Package/daed/install
 	$(INSTALL_BIN) $(CURDIR)/files/daed.init $(1)/etc/init.d/daed
 endef
 
-define Package/daed-geoip/install
-	$(INSTALL_DIR) $(1)/usr/share/daed
-	$(LN) ../v2ray/geoip.dat $(1)/usr/share/daed/geoip.dat
-endef
-
-define Package/daed-geosite/install
-	$(INSTALL_DIR) $(1)/usr/share/daed
-	$(LN) ../v2ray/geosite.dat $(1)/usr/share/daed/geosite.dat
-endef
-
 $(eval $(call Download,daed-web))
 $(eval $(call GoBinPackage,daed))
 $(eval $(call BuildPackage,daed))
-$(eval $(call BuildPackage,daed-geoip))
-$(eval $(call BuildPackage,daed-geosite))
