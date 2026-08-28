@@ -182,7 +182,7 @@ end
 
 ---- DNS over TCP or UDP or TLS (DoT) or QUIC (DoQ)
 o = s:taboption("DNS", Value, "remote_dns", translate("Remote DNS"))
-o.datatype = "or(ipaddr,ipaddrport)"
+o.datatype = "or(ipaddr,ipaddrport(1))"
 o.default = "1.1.1.1"
 o:value("1.1.1.1", "1.1.1.1 (CloudFlare)")
 o:value("1.1.1.2", "1.1.1.2 (CloudFlare-Security)")
@@ -282,8 +282,8 @@ loglevel:value("error")
 o = s:taboption("log", DummyValue, "_log", translate("Log File"))
 o.rawhtml = true
 o.cfgvalue = function(t, n)
-	local log_path = api.TMP_PATH .. "/acl/default/global.log"
-	local log_url = api.url("get_redir_log") .. "?id=default&name=global"
+	local log_path = api.TMP_PATH .. "/acl/default.log"
+	local log_url = api.url("get_redir_log") .. "?id=default"
 	return string.format(
 		'<code>%s</code>&nbsp;&nbsp;<input class="btn cbi-button cbi-button-apply" type="button" value="%s" onclick="window.open(\'%s\', \'_blank\')" />',
 		log_path,

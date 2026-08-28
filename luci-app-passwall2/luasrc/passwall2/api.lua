@@ -26,6 +26,7 @@ TMP_PATH = "/tmp/etc/" .. c_config
 CACHE_PATH = TMP_PATH .. "_tmp"
 S_TMP_PATH = "/tmp/etc/" .. s_config
 TMP_IFACE_PATH = TMP_PATH .. "/iface"
+TMP_ACL_PATH = TMP_PATH .. "/acl"
 
 local lang = uci:get("luci", "main", "lang") or "auto"
 if lang == "auto" then
@@ -201,9 +202,10 @@ function get_cache_var(key)
 	return val
 end
 
-function get_new_port()
+function get_new_port(p)
+	if not p then p = "auto" end
 	local cmd_format = ". /usr/share/passwall2/utils.sh ; echo -n $(get_new_port %s tcp,udp)"
-	return tonumber(sys.exec(string.format(cmd_format, "auto")))
+	return tonumber(sys.exec(string.format(cmd_format, p)))
 end
 
 function exec_call(cmd)
@@ -462,14 +464,14 @@ datatypes.json = is_json
 
 function is_timehhmm(str)
 	local hour, minute = string.match(str, "^(%d?%d):(%d%d)$")
-    if hour and minute then
-        hour = tonumber(hour)
-        minute = tonumber(minute)
-        if hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 then
-            return true
-        end
-    end
-    return false
+	if hour and minute then
+		hour = tonumber(hour)
+		minute = tonumber(minute)
+		if hour >= 0 and hour <= 23 and minute >= 0 and minute <= 59 then
+			return true
+		end
+	end
+	return false
 end
 datatypes.timehhmm = is_timehhmm
 
@@ -613,7 +615,7 @@ function get_valid_nodes()
 				end
 			end
 			local port = e.port or e.hysteria_hop or e.hysteria2_hop
-			local is_realm = (e.type == "Hysteria2" or e.protocol == 'hysteria2') and e.hysteria2_realms or nil
+			local is_realm = e.protocol == 'hysteria2' and e.hysteria2_realms or nil
 			if (port and e.address) or is_realm then
 				local address = e.address
 				if is_ip(address) or datatypes.hostname(address) or is_realm then
@@ -739,7 +741,7 @@ function get_node_remarks(n)
 				end
 				type_name = type_name .. " " .. protocol
 			end
-			if (n.type == "Hysteria2" or n.protocol == 'hysteria2') and n.hysteria2_realms then
+			if n.protocol == "hysteria2" and n.hysteria2_realms then
 				type_name = type_name .. " Realm"
 			end
 			remarks = trim("%s：[%s]" % {type_name, n.remarks})
@@ -1447,17 +1449,9 @@ function set_default_cbi()
 			if not config then config = c_config end
 			default_init(self, config, ...)
 			self.api = require "luci.passwall2.api"
-		end
-		if is_js_luci() == true then
-			local default_parse = Map.parse
-			function Map.parse(self, ...)
-				apply_redirect(self)
-				local old = self.on_after_save
-				self.on_after_save = function(self)
-					if old then old(self) end
-					self:set("@global[0]", "timestamp", os.time())
-				end
-				return default_parse(self, ...)
+			if is_js_luci() == true then
+				self.apply_on_parse = false
+				self.is_js_luci = true
 			end
 		end
 		function Map.foreach(self, stype, func)
@@ -1698,34 +1692,6 @@ function format_go_time(input, default)
 	if m > 0 then result = result .. m .. "m" end
 	if s > 0 or result == "" then result = result .. s .. "s" end
 	return result
-end
-
-function apply_redirect(m)
-	local tmp_uci_file = "/etc/config/" .. c_config .. "_redirect"
-	if m.redirect and m.redirect ~= "" then
-		if fs.access(tmp_uci_file) then
-			local redirect
-			for line in io.lines(tmp_uci_file) do
-				redirect = line:match("option%s+url%s+['\"]([^'\"]+)['\"]")
-				if redirect and redirect ~= "" then break end
-			end
-			if redirect and redirect ~= "" then
-				sys.call("/bin/rm -f " .. tmp_uci_file)
-				luci.http.redirect(redirect)
-			end
-		else
-			fs.writefile(tmp_uci_file, "config redirect\n")
-		end
-		m.on_after_save = function(self)
-			local redirect = self.redirect
-			if redirect and redirect ~= "" then
-				uci:set(c_config .. "_redirect", "@redirect[0]", "url", redirect)
-			end
-		end
-	else
-		uci:revert(c_config .. "_redirect")
-		sys.call("/bin/rm -f " .. tmp_uci_file)
-	end
 end
 
 function match_node_rule(name, rule)
@@ -2082,4 +2048,28 @@ function gen_wireguard_key()
 			public_key = public_key
 		}
 	end
+end
+
+function parseDNS(dns)
+	if not dns then return nil end
+	if true then
+		-- IPv6
+		-- [::1]:5053
+		local address, port = dns:match("%[(.-)%]:([0-9]+)$")
+		if address and datatypes.ip6addr(address) and datatypes.port(port) then
+			return address, port
+		end
+		-- [::1]
+		if is_ipv6(dns) then
+			return get_ipv6_only(dns), 53
+		end
+	end
+	if true then
+		-- 1.1.1.1:5053
+		local h, p = dns:match("^([^:]+):([^:]+)$")
+		if (h and p and datatypes.ip4addr(h) and datatypes.port(p)) then
+			return h, p
+		end
+	end
+	return dns, 53
 end
