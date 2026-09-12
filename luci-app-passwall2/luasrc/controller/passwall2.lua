@@ -280,7 +280,7 @@ end
 
 function index_status()
 	local e = {}
-	e["global_status"] = luci.sys.call("/bin/busybox top -bn1 | grep -v 'grep' | grep '%s/bin/' | grep '/acl/default' >/dev/null" % api.TMP_PATH) == 0
+	e["global_status"] = luci.sys.call("/bin/busybox top -bn1 | grep -v 'grep' | grep '%s/bin/' | grep '/acl_default\\.json' >/dev/null" % api.TMP_PATH) == 0
 	http_write_json(e)
 end
 
@@ -387,7 +387,15 @@ function add_node()
 		uci_set(uid, "group", group)
 	end
 
-	uci_set(uid, "type", "Xray")
+	if api.finded_com("sing-box") then
+		uci_set(uid, "type", "sing-box")
+	elseif api.finded_com("xray") then
+		uci_set(uid, "type", "Xray")
+	elseif api.is_finded("sslocal") then
+		uci_set(uid, "type", "SS-Rust")
+	elseif api.is_finded("ssr-local") then
+		uci_set(uid, "type", "SSR")
+	end
 
 	if redirect == "1" then
 		uci_save()
