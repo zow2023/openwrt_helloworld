@@ -596,7 +596,6 @@ local function processData(szType, content, add_mode, group, sub_cfg)
 		-- if ssr_group then result.ssr_group = ssr_group end
 		result.remarks = base64Decode(params.remarks)
 	elseif szType == 'vmess' then
-		local info = jsonParse(content)
 		if sub_vmess_type == "sing-box" and has_singbox then
 			result.type = 'sing-box'
 		elseif sub_vmess_type == "xray" and has_xray then
@@ -605,6 +604,58 @@ local function processData(szType, content, add_mode, group, sub_cfg)
 			log("跳过 VMess 节点，因未适配到 VMess 核心程序，或未正确设置节点使用类型。")
 			return nil
 		end
+		-- vmess://base64(json)
+		local info = jsonParse(content)
+		if not info then
+			-- vmess://base64(auto:uuid@host:port)?tfo=1&remark=xxx&&alterId=0&obfs=websocket&path=%2F&obfsParam=host (obfs ~= ws obfsParam={})
+			if content:find("?", 1, true) then
+				info = {}
+				local Info = split(content:gsub("/%?", "?"), "%?")
+				local sp = split(base64Decode(Info[1]), "@")
+				local id_info = split(sp[1], ":")
+				info.security = (#id_info > 1 and id_info[1] ~= "") and id_info[1] or "auto"
+				info.id = id_info[#id_info]
+
+				local addr, port = sp[2], "443"
+				if api.is_ipv6addrport(addr) then
+					local a, p = addr:match("^%[(.+)%]:(%d+)$")
+					if a then addr, port = a, p end
+					addr = api.get_ipv6_only(addr)
+				else
+					local host_port = split(addr, ":")
+					addr = host_port[1]
+					if #host_port > 1 then port = host_port[#host_port] end
+				end
+				info.add, info.port = addr, port
+
+				local params = {}
+				for _, v in pairs(split(Info[2], '&')) do
+					local s = v:find("=", 1, true)
+					if s and s > 1 then
+						params[v:sub(1, s - 1)] = UrlDecode(v:sub(s + 1))
+					end
+				end
+				info.ps = params.remark or params.remarks
+				info.net = (params.obfs == "websocket") and "ws" or (params.obfs or "tcp")
+				info.path = params.path
+				info.aid = params.alterId or "0"
+				info.tls = params.tls
+				info.sni = params.peer
+				info.tfo = params.tfo
+				local op_info = jsonParse(params.obfsParam)
+				if op_info then
+					if op_info.header then info.type = op_info.header end
+					if op_info.Host then info.host = op_info.Host end
+				else
+					info.host = params.obfsParam
+				end
+				info.allowinsecure = params.allowInsecure
+			else
+				log("跳过 VMess 节点，该节点 URI 格式无法解析。")
+				return nil
+			end
+		end
+
 		result.alter_id = info.aid
 		result.address = info.add
 		result.port = info.port
@@ -1375,6 +1426,7 @@ local function processData(szType, content, add_mode, group, sub_cfg)
 		result.hysteria_auth_type = "string"
 		result.hysteria_auth_password = params.auth
 		result.tls_serverName = params.peer or params.sni or ""
+		result.tls_pinSHA256 = params.pcs or params.pinSHA256
 		local insecure = params.allowinsecure or params.allowInsecure or params.insecure
 		result.tls_allowInsecure = (insecure == "1" or insecure == "0") and insecure or (sub_allowinsecure and "1" or "0")
 		result.alpn = params.alpn
@@ -1442,14 +1494,8 @@ local function processData(szType, content, add_mode, group, sub_cfg)
 			result.protocol = "hysteria2"
 			result.use_finalmask = (params.fm and params.fm ~= "") and "1" or nil
 			result.finalmask = (params.fm and params.fm ~= "") and api.base64Encode(params.fm) or nil
-			if is_singbox and (params.pcs or params.pinsha256) then
-				params.allowinsecure = "1"
-			end
 		elseif has_hysteria2 then
 			result.type = "Hysteria2"
-			if params.pcs or params.pinsha256 then
-				params.allowinsecure = "0"
-			end
 		else
 			log("跳过 Hysteria2 节点，因未适配到 Hysteria2 核心程序，或未正确设置节点使用类型。")
 			return nil
@@ -1509,6 +1555,7 @@ local function processData(szType, content, add_mode, group, sub_cfg)
 		end
 		result.tls_serverName = params.sni
 		result.tls_disable_sni = params.disable_sni
+		result.tls_pinSHA256 = params.pcs or params.pinsha256
 		result.tuic_alpn = params.alpn or "h3"
 		result.tuic_congestion_control = params.congestion_control or "cubic"
 		result.tuic_udp_relay_mode = params.udp_relay_mode or "native"
@@ -1564,6 +1611,7 @@ local function processData(szType, content, add_mode, group, sub_cfg)
 			if params.security == "tls" or params.security == "reality" then
 				result.tls = "1"
 				result.tls_serverName = params.sni or params.peer
+				result.tls_pinSHA256 = params.pcs or params.pinsha256
 				result.alpn = params.alpn
 				if params.fp and params.fp ~= "" then
 					result.utls = "1"
