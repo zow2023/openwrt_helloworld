@@ -321,20 +321,20 @@ function add_rule(var)
 	local function foreach_geosite(list_arg, callback)
 		local geosite_path = api.uci_get_c("@global_rules[0]", "v2ray_location_asset") or "/usr/share/v2ray/"
 		geosite_path = geosite_path:match("^(.*)/") .. "/geosite.dat"
-		if not fs.access(geosite_path) then return end
+		if not fs.access(geosite_path) then return 1, "File geosite.dat not found" end
+		if not list_arg or list_arg == "" then return 1, "Site list cannot be empty" end
 		local bin = api.finded_com("geoview")
-		if not (bin and list_arg) then return end
 		local cmd = string.format("%q -type geosite -action extract -input %q -list %q -lowmem=true", bin, geosite_path, list_arg)
-		local pipe = io.popen(cmd)
-		if not pipe then return end
-		for line in pipe:lines() do
-			if line ~= "" then callback(line) end
+		local code, out = api.exec_call(cmd)
+		if code ~= 0 then return code, out end
+		for line in out:gmatch("[^\r\n]+") do
+			callback(line)
 		end
-		pipe:close()
+		return 0
 	end
 
 	local function get_dns_config_key()
-		local address_md5 = api.md5_string(sys.exec([[uci show passwall | grep -E '\.(address|download_address|domain_resolver_dns|domain_resolver_dns_https)=|^passwall\.sub_[^.]+\.url=' | cut -d "'" -f 2 | sort -u]]))
+		local address_md5 = api.md5_string(sys.exec([[uci show passwall | grep -E '\.(address|download_address|domain_resolver_dns|domain_resolver_dns_https)=' | cut -d "'" -f 2 | sort -u]]))
 		local new_rules = sys.exec([[
 		for f in \
 			/usr/share/passwall/rules/chnlist \
@@ -405,6 +405,7 @@ function add_rule(var)
 
 	if not fs.access(CACHE_DNS_PATH) then
 		fs.mkdir(CACHE_DNS_PATH)
+		local GEO_SUCCESS = true
 
 		--屏蔽列表
 		if USE_CHINADNS_NG == "0" and USE_BLOCK_LIST == "1" then
@@ -425,10 +426,15 @@ function add_rule(var)
 				f:close()
 			end
 			if USE_GEOVIEW == "1" and geosite_arg ~= "" then
-				foreach_geosite(geosite_arg, function(line)
+				local code, out = foreach_geosite(geosite_arg, function(line)
 					set_domain_address(line, "")
 				end)
-				log("  - 解析[屏蔽列表] Geosite 到屏蔽域名表(blocklist)完成")
+				if code == 0 then
+					log("  - 解析[屏蔽列表] Geosite 到屏蔽域名表(blocklist)完成")
+				else
+					log("  - 解析[屏蔽列表] Geosite 到屏蔽域名表(blocklist)失败！[" .. out .. "]")
+					GEO_SUCCESS = false
+				end
 			end
 		end
 
@@ -459,12 +465,6 @@ function add_rule(var)
 					local dns, _ = api.get_domain_port_from_url(t.domain_resolver_dns or t.domain_resolver_dns_https or "")
 					if dns and dns ~= "" then
 						process_address(dns)
-					end
-				end)
-				api.uci_foreach_c("subscribe_list", function(t)  --订阅链接
-					local url, _ = api.get_domain_port_from_url(t.url or "")
-					if url and url ~= "" then
-						process_address(url)
 					end
 				end)
 				log(string.format("  - 节点列表中的域名(vpslist)：%s", fwd_dns or "默认"))
@@ -503,12 +503,17 @@ function add_rule(var)
 					log(string.format("  - 域名白名单(whitelist)：%s", fwd_dns or "默认"))
 				end
 				if USE_GEOVIEW == "1" and geosite_arg ~= "" then
-					foreach_geosite(geosite_arg, function(line)
+					local code, out = foreach_geosite(geosite_arg, function(line)
 						add_excluded_domain(line)
 						set_domain_dns(line, fwd_dns)
 						set_domain_ipset(line, table.concat(sets, ","))
 					end)
-					log("  - 解析[直连列表] Geosite 到域名白名单(whitelist)完成")
+					if code == 0 then
+						log("  - 解析[直连列表] Geosite 到域名白名单(whitelist)完成")
+					else
+						log("  - 解析[直连列表] Geosite 到域名白名单(whitelist)失败！[" .. out .. "]")
+						GEO_SUCCESS = false
+					end
 				end
 			end
 		end
@@ -556,7 +561,7 @@ function add_rule(var)
 					log(string.format("  - 代理域名表(blacklist)：%s", fwd_dns or "默认"))
 				end
 				if USE_GEOVIEW == "1" and geosite_arg ~= "" then
-					foreach_geosite(geosite_arg, function(line)
+					local code, out = foreach_geosite(geosite_arg, function(line)
 						add_excluded_domain(line)
 						if NO_PROXY_IPV6 == "1" then
 							set_domain_address(line, "::")
@@ -564,7 +569,12 @@ function add_rule(var)
 						set_domain_dns(line, fwd_dns)
 						set_domain_ipset(line, table.concat(sets, ","))
 					end)
-					log("  - 解析[代理列表] Geosite 到代理域名表(blacklist)完成")
+					if code == 0 then
+						log("  - 解析[代理列表] Geosite 到代理域名表(blacklist)完成")
+					else
+						log("  - 解析[代理列表] Geosite 到代理域名表(blacklist)失败！[" .. out .. "]")
+						GEO_SUCCESS = false
+					end
 				end
 			end
 		end
@@ -698,12 +708,17 @@ function add_rule(var)
 					end
 
 					if USE_GFW_LIST == "1" and CHN_LIST == "0" and USE_GEOVIEW == "1" and geosite_arg ~= "" then  --仅GFW模式解析geosite
-						foreach_geosite(geosite_arg, function(line)
+						local code, out = foreach_geosite(geosite_arg, function(line)
 							add_excluded_domain(line)
 							set_domain_dns(line, fwd_dns)
 							set_domain_ipset(line, table.concat(sets, ","))
 						end)
-						log(string.format("  - 解析分流规则(%s) Geosite 完成", s.remarks))
+						if code == 0 then
+							log(string.format("  - 解析分流规则(%s) Geosite 完成", s.remarks))
+						else
+							log(string.format("  - 解析分流规则(%s) Geosite 失败！[" .. out .. "]", s.remarks))
+							GEO_SUCCESS = false
+						end
 					end
 
 					log(string.format("  - Sing-Box/Xray分流规则(%s)：%s", s.remarks, fwd_dns or "默认"))
@@ -755,7 +770,8 @@ function add_rule(var)
 			server_out:close()
 			ipset_out:close()
 		end
-
+		
+		if not GEO_SUCCESS then new_text = "" end
 		local f_out = io.open(CACHE_TEXT_FILE, "a")
 		f_out:write(new_text)
 		f_out:close()
