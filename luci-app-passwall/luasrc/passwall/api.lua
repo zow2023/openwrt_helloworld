@@ -169,7 +169,7 @@ function del_cache_var(key)
 end
 
 function set_cache_var(key, val)
-	sys.call(string.format('. /usr/share/passwall/utils.sh ; set_cache_var "%s" "%s"', key, val))
+	sys.call(string.format('. /usr/share/passwall/utils.sh ; set_cache_var %s %s', util.shellquote(tostring(key)), util.shellquote(tostring(val))))
 end
 
 function get_cache_var(key)
@@ -178,9 +178,11 @@ function get_cache_var(key)
 	return val
 end
 
-function get_new_port()
-	local cmd_format = ". /usr/share/passwall/utils.sh ; echo -n $(get_new_port %s tcp,udp)"
-	return tonumber(sys.exec(string.format(cmd_format, "auto")))
+function get_new_port(start_port, protocol)
+	start_port = tonumber(start_port) or "auto"
+	if protocol ~= "tcp" and protocol ~= "udp" then protocol = "tcp,udp" end
+	local cmd_format = ". /usr/share/passwall/utils.sh ; echo -n $(get_new_port %s %s)"
+	return tonumber(sys.exec(string.format(cmd_format, util.shellquote(tostring(start_port)), util.shellquote(protocol))))
 end
 
 function exec_call(cmd)
@@ -268,10 +270,11 @@ end
 -- 计算字符串 MD5
 function md5_string(str)
 	if type(str) ~= "string" then return "" end
-	local quoted = "'" .. str:gsub("'", "'\\''") .. "'"
-	local out = sys.exec("printf '%s' " .. quoted .. " | md5sum")
-	if not out then return "" end
-	return out:sub(1, 32)
+	local path = trim(sys.exec("mktemp /tmp/md5.XXXXXX") or "")
+	if path == "" then return "" end
+	local md5 = fs.writefile(path, str) == #str and md5_file(path) or ""
+	fs.unlink(path)
+	return md5
 end
 
 --提取URL中的域名和端口(no ip)
@@ -871,18 +874,25 @@ function clone(org)
 end
 
 function get_bin_version_cache(file, cmd)
-	sys.call("mkdir -p " .. CACHE_PATH)
-	if fs.access(file) then
+	if file and file ~= "" and fs.access(file) then
 		chmod_755(file)
-		local md5 = md5_file(file)
-		if fs.access(CACHE_PATH .. "/" .. md5) then
-			return sys.exec("echo -n $(cat %s)" % { CACHE_PATH .. "/" .. md5 })
-		else
-			local version = sys.exec(string.format("echo -n $(%s %s)", file, cmd))
-			if version and version ~= "" then
-				sys.call("echo '%s' > %s"  % { version, CACHE_PATH .. "/" .. md5})
-				return version
+		local stat = fs.stat(file)
+		local cache_file
+		if stat and stat.dev and stat.ino and stat.size and stat.mtime and stat.ctime then
+			-- Use metadata to avoid hashing the entire binary on every lookup.
+			cache_file = CACHE_PATH .. "/binver_" .. table.concat({stat.dev, stat.ino, stat.size, stat.mtime, stat.ctime}, "_")
+			local cached = fs.readfile(cache_file)
+			if cached and trim(cached) ~= "" then
+				return trim(cached)
 			end
+		end
+		local version = sys.exec(string.format("echo -n $(%s %s)", util.shellquote(file), cmd))
+		if version and version ~= "" then
+			if cache_file then
+				fs.mkdirr(CACHE_PATH)
+				fs.writefile(cache_file, version)
+			end
+			return version
 		end
 	end
 	return ""
@@ -904,7 +914,7 @@ end
 
 local function is_file(path)
 	if path and #path > 1 then
-		if sys.exec('[ -f "%s" ] && echo -n 1' % path) == "1" then
+		if fs.stat(path, "type") == "reg" then
 			return true
 		end
 	end
@@ -913,7 +923,7 @@ end
 
 local function is_dir(path)
 	if path and #path > 1 then
-		if sys.exec('[ -d "%s" ] && echo -n 1' % path) == "1" then
+		if fs.stat(path, "type") == "dir" then
 			return true
 		end
 	end
@@ -1554,7 +1564,7 @@ function to_install_self(id, force)
 		remove(dir)
 		return {code = 1}
 	end
-	fs.chmod(script, 755)
+	chmod_755(script)
 	fs.writefile(status, '{"installing":true}')
 	sys.call("nohup " .. script .. " " .. dir .. " " .. status .. " " .. manager .. " " ..
 		(force == "1" and "1" or "0") .. " >/dev/null 2>&1 </dev/null &")
@@ -1562,7 +1572,7 @@ function to_install_self(id, force)
 end
 
 function is_js_luci()
-	return sys.call('[ -f "/www/luci-static/resources/uci.js" ]') == 0
+	return fs.stat("/www/luci-static/resources/uci.js", "type") == "reg"
 end
 
 function set_default_cbi()
@@ -1612,6 +1622,16 @@ function set_default_cbi()
 			end
 			self:append(obj)
 			return obj
+		end
+	end
+	if true then
+		--Table
+		local Table = cbi.Table
+		local default_init = Table.__init__
+		function Table.__init__(self, form, ...)
+			default_init(self, form, ...)
+			-- Table 的 map 是独立数据源，需要从所属表单传递 API
+			self.map.api = form.api
 		end
 	end
 	if true then
